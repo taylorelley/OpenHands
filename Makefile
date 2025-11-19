@@ -153,6 +153,9 @@ install-python-dependencies:
 	fi; \
 	ENV_PREFIX="$$PY_PATH $$SSL_ENV"; \
 	eval $$ENV_PREFIX poetry env use python$(PYTHON_VERSION); \
+	if [ "$${INSECURE_SSL:-0}" = "1" ] && [ -f "$(shell pwd)/sitecustomize.py" ]; then \
+	eval $$ENV_PREFIX poetry run python -c "import pathlib, shutil, sysconfig; src=pathlib.Path('$(shell pwd)/sitecustomize.py'); target=pathlib.Path(sysconfig.get_paths()['purelib'])/'sitecustomize.py'; shutil.copy2(src, target); print(f'Installed sitecustomize.py to {target}')"; \
+	fi; \
 	if [ "$(shell uname)" = "Darwin" ]; then \
 	echo "$(BLUE)Installing chroma-hnswlib...$(RESET)"; \
 	eval $$ENV_PREFIX HNSWLIB_NO_NATIVE=1 poetry run pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org chroma-hnswlib; \
