@@ -138,53 +138,50 @@ check-poetry:
 install-python-dependencies:
 	@echo "$(GREEN)Installing Python dependencies...$(RESET)"
 	@if [ -z "${TZ}" ]; then \
-			echo "Defaulting TZ (timezone) to UTC"; \
-			export TZ="UTC"; \
+	echo "Defaulting TZ (timezone) to UTC"; \
+	export TZ="UTC"; \
 	fi
-	@SSL_ENV=""; PY_PATH=""; \
-		if [ "${INSECURE_SSL:-0}" = "1" ]; then \
-			echo "$(YELLOW)INSECURE_SSL=1 detected: disabling SSL verification for dependency installation.$(RESET)"; \
-			SSL_ENV='PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE= CURL_CA_BUNDLE= SSL_CERT_FILE= PIP_CONFIG_FILE="$(shell pwd)/pip.conf"'; \
-			mkdir -p ~/.config/pip ~/.pip; \
-			cp pip.conf ~/.config/pip/pip.conf 2>/dev/null || true; \
-			cp pip.conf ~/.pip/pip.conf 2>/dev/null || true; \
-			poetry config certificates.PyPI.cert false 2>/dev/null || true; \
-			poetry config certificates.files-pythonhosted-org.cert false 2>/dev/null || true; \
-			if [ -f "$(shell pwd)/sitecustomize.py" ]; then PY_PATH="PYTHONPATH=$(shell pwd):$$PYTHONPATH"; fi; \
-		else \
-			echo "$(YELLOW)Using default SSL verification. Set INSECURE_SSL=1 to bypass in TLS inspection environments.$(RESET)"; \
-		fi; \
-		ENV_PREFIX="$$PY_PATH $$SSL_ENV"; \
-		eval $$ENV_PREFIX poetry env use python$(PYTHON_VERSION); \
-		if [ "$(shell uname)" = "Darwin" ]; then \
-			echo "$(BLUE)Installing chroma-hnswlib...$(RESET)"; \
-			eval $$ENV_PREFIX HNSWLIB_NO_NATIVE=1 poetry run pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org chroma-hnswlib; \
-		fi; \
-		if [ -n "${POETRY_GROUP}" ]; then \
-			echo "Installing only POETRY_GROUP=${POETRY_GROUP}"; \
-			eval $$ENV_PREFIX poetry install --only $${POETRY_GROUP}; \
-		else \
-			eval $$ENV_PREFIX poetry install --with dev,test,runtime; \
-		fi; \
-		if [ "${INSTALL_PLAYWRIGHT}" != "false" ] && [ "${INSTALL_PLAYWRIGHT}" != "0" ]; then \
-			if [ -f "/etc/manjaro-release" ]; then \
-				echo "$(BLUE)Detected Manjaro Linux. Installing Playwright dependencies...$(RESET)"; \
-				eval $$ENV_PREFIX poetry run pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org playwright; \
-				eval $$ENV_PREFIX poetry run playwright install chromium; \
-			else \
-				if [ ! -f cache/playwright_chromium_is_installed.txt ]; then \
-					echo "Running playwright install --with-deps chromium..."; \
-					eval $$ENV_PREFIX poetry run playwright install --with-deps chromium; \
-					mkdir -p cache; \
-					touch cache/playwright_chromium_is_installed.txt; \
-				else \
-					echo "Setup already done. Skipping playwright installation."; \
-				fi; \
-			fi; \
-		else \
-			echo "Skipping Playwright installation (INSTALL_PLAYWRIGHT=${INSTALL_PLAYWRIGHT})."; \
-		fi; \
-		echo "$(GREEN)Python dependencies installed successfully.$(RESET)"
+	@SSL_ENV="PIP_CONFIG_FILE=/dev/null"; PY_PATH=""; \
+	if [ "$${INSECURE_SSL:-0}" = "1" ]; then \
+	echo "$(YELLOW)INSECURE_SSL=1 detected: disabling SSL verification for dependency installation.$(RESET)"; \
+	SSL_ENV='PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE= CURL_CA_BUNDLE= SSL_CERT_FILE= PIP_CONFIG_FILE="$(shell pwd)/pip.conf"'; \
+	if [ -f "$(shell pwd)/sitecustomize.py" ]; then PY_PATH="PYTHONPATH=$(shell pwd):$$PYTHONPATH"; fi; \
+	else \
+	echo "$(YELLOW)Using default SSL verification. Set INSECURE_SSL=1 to bypass in TLS inspection environments.$(RESET)"; \
+	poetry config --unset certificates.PyPI.cert 2>/dev/null || true; \
+	poetry config --unset certificates.files-pythonhosted-org.cert 2>/dev/null || true; \
+	fi; \
+	ENV_PREFIX="$$PY_PATH $$SSL_ENV"; \
+	eval $$ENV_PREFIX poetry env use python$(PYTHON_VERSION); \
+	if [ "$(shell uname)" = "Darwin" ]; then \
+	echo "$(BLUE)Installing chroma-hnswlib...$(RESET)"; \
+	eval $$ENV_PREFIX HNSWLIB_NO_NATIVE=1 poetry run pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org chroma-hnswlib; \
+	fi; \
+	if [ -n "${POETRY_GROUP}" ]; then \
+	echo "Installing only POETRY_GROUP=${POETRY_GROUP}"; \
+	eval $$ENV_PREFIX poetry install --only $${POETRY_GROUP}; \
+	else \
+	eval $$ENV_PREFIX poetry install --with dev,test,runtime; \
+	fi; \
+	if [ "$${INSTALL_PLAYWRIGHT}" != "false" ] && [ "$${INSTALL_PLAYWRIGHT}" != "0" ]; then \
+	if [ -f "/etc/manjaro-release" ]; then \
+	echo "$(BLUE)Detected Manjaro Linux. Installing Playwright dependencies...$(RESET)"; \
+	eval $$ENV_PREFIX poetry run pip install --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org playwright; \
+	eval $$ENV_PREFIX poetry run playwright install chromium; \
+	else \
+	if [ ! -f cache/playwright_chromium_is_installed.txt ]; then \
+	echo "Running playwright install --with-deps chromium..."; \
+	eval $$ENV_PREFIX poetry run playwright install --with-deps chromium; \
+	mkdir -p cache; \
+	touch cache/playwright_chromium_is_installed.txt; \
+	else \
+	echo "Setup already done. Skipping playwright installation."; \
+	fi; \
+	fi; \
+	else \
+	echo "Skipping Playwright installation (INSTALL_PLAYWRIGHT=${INSTALL_PLAYWRIGHT})."; \
+	fi; \
+	echo "$(GREEN)Python dependencies installed successfully.$(RESET)"
 
 install-frontend-dependencies: check-npm check-nodejs
 	@echo "$(YELLOW)Setting up frontend environment...$(RESET)"
