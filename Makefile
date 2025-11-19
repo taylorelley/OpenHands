@@ -148,7 +148,7 @@ install-python-dependencies:
 	@poetry config certificates.PyPI.cert false 2>/dev/null || true
 	@poetry config certificates.files-pythonhosted-org.cert false 2>/dev/null || true
 	@if [ -f "$(shell pwd)/sitecustomize.py" ]; then \
-		POETRY_PYTHON=$$(cat <<'PY' | python - 2>/dev/null | tail -n1); \
+	POETRY_PYTHON=$$(cat <<'PY' | python - 2>/dev/null | tail -n1); \
 	import sys
 	try:
 	    import poetry
@@ -156,16 +156,16 @@ install-python-dependencies:
 	except Exception:
 	    sys.exit(0)
 	PY
-		if [ -n "$$POETRY_PYTHON" ] && [ -x "$$POETRY_PYTHON" ]; then \
-			POETRY_SITE_PACKAGES=$$(cat <<'PY' | $$POETRY_PYTHON - 2>/dev/null | tail -n1); \
+	if [ -n "$$POETRY_PYTHON" ] && [ -x "$$POETRY_PYTHON" ]; then \
+	POETRY_SITE_PACKAGES=$$(cat <<'PY' | $$POETRY_PYTHON - 2>/dev/null | tail -n1); \
 	import site
 	print(site.getsitepackages()[0])
 	PY
-			if [ -n "$$POETRY_SITE_PACKAGES" ]; then \
-				echo "Installing sitecustomize.py to Poetry's site-packages..."; \
-				cp $(shell pwd)/sitecustomize.py $$POETRY_SITE_PACKAGES/sitecustomize.py 2>/dev/null || true; \
-			fi; \
-			fi; \
+	if [ -n "$$POETRY_SITE_PACKAGES" ]; then \
+	echo "Installing sitecustomize.py to Poetry's site-packages..."; \
+	cp $(shell pwd)/sitecustomize.py $$POETRY_SITE_PACKAGES/sitecustomize.py 2>/dev/null || true; \
+	fi; \
+	fi; \
 	fi
 	@export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE="" CURL_CA_BUNDLE="" SSL_CERT_FILE="" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
 	poetry env use python$(PYTHON_VERSION)
