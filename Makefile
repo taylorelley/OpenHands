@@ -53,7 +53,7 @@ check-system:
 			echo "$(BLUE)Manjaro Linux detected.$(RESET)"; \
 		else \
 			echo "$(BLUE)Linux detected.$(RESET)"; \
-		fi; \
+				fi; \
 	elif [ "$$(uname -r | grep -i microsoft)" ]; then \
 		echo "$(BLUE)Windows Subsystem for Linux detected.$(RESET)"; \
 	else \
@@ -88,7 +88,7 @@ check-nodejs:
 		else \
 			echo "$(RED)Node.js 22.x or later is required. Please install Node.js 22.x or later to continue.$(RESET)"; \
 			exit 1; \
-		fi; \
+				fi; \
 	else \
 		echo "$(RED)Node.js is not installed. Please install Node.js to continue.$(RESET)"; \
 		exit 1; \
@@ -127,7 +127,7 @@ check-poetry:
 			echo "$(RED) curl -sSL https://install.python-poetry.org | python$(PYTHON_VERSION) -$(RESET)"; \
 			echo "$(RED)More detail here: https://python-poetry.org/docs/#installing-with-the-official-installer$(RESET)"; \
 			exit 1; \
-		fi; \
+				fi; \
 	else \
 		echo "$(RED)Poetry is not installed. You can install poetry by running the following command, then adding Poetry to your PATH:"; \
 		echo "$(RED) curl -sSL https://install.python-poetry.org | python$(PYTHON_VERSION) -$(RESET)"; \
@@ -148,16 +148,26 @@ install-python-dependencies:
 	@poetry config certificates.PyPI.cert false 2>/dev/null || true
 	@poetry config certificates.files-pythonhosted-org.cert false 2>/dev/null || true
 	@if [ -f "$(shell pwd)/sitecustomize.py" ]; then \
-		POETRY_PYTHON=$$(which poetry | xargs head -1 | cut -d'!' -f2); \
-		if [ -n "$$POETRY_PYTHON" ] && [ -f "$$POETRY_PYTHON" ]; then \
-			POETRY_SITE_PACKAGES=$$($$POETRY_PYTHON -c "import site; print(site.getsitepackages()[0])" 2>/dev/null); \
+		POETRY_PYTHON=$$(python - <<'PY' 2>/dev/null | tail -n1); \
+	import sys
+	try:
+	    import poetry
+	    print(sys.executable)
+	except Exception:
+	    sys.exit(0)
+	PY
+		if [ -n "$$POETRY_PYTHON" ] && [ -x "$$POETRY_PYTHON" ]; then \
+			POETRY_SITE_PACKAGES=$$($$POETRY_PYTHON - <<'PY' 2>/dev/null | tail -n1); \
+	import site
+	print(site.getsitepackages()[0])
+	PY
 			if [ -n "$$POETRY_SITE_PACKAGES" ]; then \
 				echo "Installing sitecustomize.py to Poetry's site-packages..."; \
 				cp $(shell pwd)/sitecustomize.py $$POETRY_SITE_PACKAGES/sitecustomize.py 2>/dev/null || true; \
 			fi; \
 		fi; \
 	fi
-	@export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
+	@export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE="" CURL_CA_BUNDLE="" SSL_CERT_FILE="" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
 	poetry env use python$(PYTHON_VERSION)
 	@if [ "$(shell uname)" = "Darwin" ]; then \
 		echo "$(BLUE)Installing chroma-hnswlib...$(RESET)"; \
@@ -166,12 +176,12 @@ install-python-dependencies:
 	fi
 	@if [ -n "${POETRY_GROUP}" ]; then \
 		echo "Installing only POETRY_GROUP=${POETRY_GROUP}"; \
-		export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
-		poetry install --only $${POETRY_GROUP}; \
-	else \
-		export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
-		poetry install --with dev,test,runtime; \
-	fi
+export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE="" CURL_CA_BUNDLE="" SSL_CERT_FILE="" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
+poetry install --only $${POETRY_GROUP}; \
+else \
+export PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE="" CURL_CA_BUNDLE="" SSL_CERT_FILE="" PIP_CONFIG_FILE="$(shell pwd)/pip.conf"; \
+poetry install --with dev,test,runtime; \
+fi
 	@if [ "${INSTALL_PLAYWRIGHT}" != "false" ] && [ "${INSTALL_PLAYWRIGHT}" != "0" ]; then \
 		if [ -f "/etc/manjaro-release" ]; then \
 			echo "$(BLUE)Detected Manjaro Linux. Installing Playwright dependencies...$(RESET)"; \
@@ -278,7 +288,7 @@ start-frontend:
 		SCRIPT=dev_wsl; \
 	else \
 		SCRIPT=dev; \
-	fi; \
+			fi; \
 	VITE_BACKEND_HOST=$(BACKEND_HOST_PORT) VITE_FRONTEND_PORT=$(FRONTEND_PORT) npm run $$SCRIPT -- --port $(FRONTEND_PORT) --host $(BACKEND_HOST)
 
 # Common setup for running the app (non-callable)
