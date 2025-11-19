@@ -144,21 +144,47 @@ install-python-dependencies:
 	@SSL_ENV="PIP_CONFIG_FILE=/dev/null"; PY_PATH=""; VENV_PATH=""; \
 	if [ "$${INSECURE_SSL:-0}" = "1" ]; then \
 	echo "$(YELLOW)INSECURE_SSL=1 detected: disabling SSL verification for dependency installation.$(RESET)"; \
-	SSL_ENV='PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE= CURL_CA_BUNDLE= SSL_CERT_FILE= PIP_CONFIG_FILE="$(shell pwd)/pip.conf"'; \
-	if [ -f "$(shell pwd)/sitecustomize.py" ]; then PY_PATH="PYTHONPATH=$(shell pwd):$$PYTHONPATH"; fi; \
+	SSL_ENV='PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE= CURL_CA_BUNDLE= SSL_CERT_FILE= PIP_CONFIG_FILE="$(shell pwd)/pip.conf" GIT_SSL_NO_VERIFY=1'; \
+	if [ -f "$(shell pwd)/sitecustomize.py" ]; then \
+		if [ -n "$$PYTHONPATH" ]; then \
+			PY_PATH="PYTHONPATH=$(shell pwd):$$PYTHONPATH"; \
+		else \
+			PY_PATH="PYTHONPATH=$(shell pwd)"; \
+		fi; \
+	fi; \
+	poetry config certificates.pypi.org.cert false 2>/dev/null || true; \
+	poetry config certificates.files.pythonhosted.org.cert false 2>/dev/null || true; \
+	poetry config installer.modern-installation false 2>/dev/null || true; \
+	poetry config virtualenvs.options.no-pip false 2>/dev/null || true; \
+	poetry config virtualenvs.options.no-setuptools false 2>/dev/null || true; \
+	if [ -f "$(shell pwd)/sitecustomize.py" ]; then \
+		POETRY_BIN=$$(which poetry); \
+		if [ -f "$$POETRY_BIN" ]; then \
+			POETRY_PYTHON=$$(head -1 "$$POETRY_BIN" | sed 's/#!//'); \
+			if [ -x "$$POETRY_PYTHON" ]; then \
+				POETRY_SITEPACKAGES=$$($$POETRY_PYTHON -c "import sysconfig; print(sysconfig.get_paths()['purelib'])" 2>/dev/null); \
+				if [ -n "$$POETRY_SITEPACKAGES" ] && [ -w "$$POETRY_SITEPACKAGES" ]; then \
+					cp "$(shell pwd)/sitecustomize.py" "$$POETRY_SITEPACKAGES/sitecustomize.py" 2>/dev/null || true; \
+					cp "$(shell pwd)/pip.conf" "$$POETRY_SITEPACKAGES/pip.conf" 2>/dev/null || true; \
+					echo "$(BLUE)Installed sitecustomize.py to Poetry's Python environment$(RESET)"; \
+				fi; \
+			fi; \
+		fi; \
+	fi; \
 	else \
 	echo "$(YELLOW)Using default SSL verification. Set INSECURE_SSL=1 to bypass in TLS inspection environments.$(RESET)"; \
-	poetry config --unset certificates.PyPI.cert 2>/dev/null || true; \
-	poetry config --unset certificates.files-pythonhosted-org.cert 2>/dev/null || true; \
+	poetry config --unset certificates.pypi.org.cert 2>/dev/null || true; \
+	poetry config --unset certificates.files.pythonhosted.org.cert 2>/dev/null || true; \
+	poetry config --unset installer.modern-installation 2>/dev/null || true; \
 	fi; \
 	ENV_PREFIX="$$PY_PATH $$SSL_ENV"; \
 	eval $$ENV_PREFIX poetry env use python$(PYTHON_VERSION); \
 	if [ "$${INSECURE_SSL:-0}" = "1" ]; then \
 	if [ -z "$$VENV_PATH" ]; then VENV_PATH="$$(eval $$ENV_PREFIX poetry env info -p 2>/dev/null || true)"; fi; \
 	if [ -f "$(shell pwd)/sitecustomize.py" ]; then \
-	eval $$ENV_PREFIX poetry run python -c "import pathlib, shutil, sysconfig; base=pathlib.Path('$(shell pwd)'); purelib=pathlib.Path(sysconfig.get_paths()['purelib']); src=base/'sitecustomize.py'; dst=purelib/'sitecustomize.py'; shutil.copy2(src, dst); pip_src=base/'pip.conf'; if pip_src.exists(): pip_dst=purelib/'pip.conf'; shutil.copy2(pip_src, pip_dst); print(f'Installed sitecustomize.py to {dst} and pip.conf to {pip_dst}'); else: print(f'Installed sitecustomize.py to {dst}');"; \
+	eval "$$ENV_PREFIX poetry run python -c 'import pathlib, shutil, sysconfig; base=pathlib.Path(\"$(shell pwd)\"); purelib=pathlib.Path(sysconfig.get_paths()[\"purelib\"]); src=base/\"sitecustomize.py\"; dst=purelib/\"sitecustomize.py\"; shutil.copy2(src, dst); pip_src=base/\"pip.conf\"; pip_dst=purelib/\"pip.conf\"; shutil.copy2(pip_src, pip_dst) if pip_src.exists() else None; print(f\"Installed sitecustomize.py to {dst}\" + (f\" and pip.conf to {pip_dst}\" if pip_src.exists() else \"\"))'"; \
 	elif [ -f "$(shell pwd)/pip.conf" ]; then \
-	eval $$ENV_PREFIX poetry run python -c "import pathlib, shutil, sysconfig; base=pathlib.Path('$(shell pwd)'); purelib=pathlib.Path(sysconfig.get_paths()['purelib']); pip_src=base/'pip.conf'; pip_dst=purelib/'pip.conf'; shutil.copy2(pip_src, pip_dst); print(f'Installed pip.conf to {pip_dst}')"; \
+	eval "$$ENV_PREFIX poetry run python -c 'import pathlib, shutil, sysconfig; base=pathlib.Path(\"$(shell pwd)\"); purelib=pathlib.Path(sysconfig.get_paths()[\"purelib\"]); pip_src=base/\"pip.conf\"; pip_dst=purelib/\"pip.conf\"; shutil.copy2(pip_src, pip_dst); print(f\"Installed pip.conf to {pip_dst}\")'"; \
 	fi; \
 	fi; \
 	if [ "$(shell uname)" = "Darwin" ]; then \
