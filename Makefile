@@ -141,11 +141,12 @@ install-python-dependencies:
 	echo "Defaulting TZ (timezone) to UTC"; \
 	export TZ="UTC"; \
 	fi
-	@SSL_ENV="PIP_CONFIG_FILE=/dev/null"; PY_PATH=""; \
+	@SSL_ENV="PIP_CONFIG_FILE=/dev/null"; PY_PATH=""; VENV_PATH=""; \
 	if [ "$${INSECURE_SSL:-0}" = "1" ]; then \
 	echo "$(YELLOW)INSECURE_SSL=1 detected: disabling SSL verification for dependency installation.$(RESET)"; \
 	SSL_ENV='PYTHONHTTPSVERIFY=0 PYTHONWARNINGS="ignore:Unverified HTTPS request" REQUESTS_CA_BUNDLE= CURL_CA_BUNDLE= SSL_CERT_FILE= PIP_CONFIG_FILE="$(shell pwd)/pip.conf"'; \
 	if [ -f "$(shell pwd)/sitecustomize.py" ]; then PY_PATH="PYTHONPATH=$(shell pwd):$$PYTHONPATH"; fi; \
+	VENV_PATH="$$(poetry env info -p 2>/dev/null || true)"; \
 	else \
 	echo "$(YELLOW)Using default SSL verification. Set INSECURE_SSL=1 to bypass in TLS inspection environments.$(RESET)"; \
 	poetry config --unset certificates.PyPI.cert 2>/dev/null || true; \
@@ -155,6 +156,11 @@ install-python-dependencies:
 	eval $$ENV_PREFIX poetry env use python$(PYTHON_VERSION); \
 	if [ "$${INSECURE_SSL:-0}" = "1" ] && [ -f "$(shell pwd)/sitecustomize.py" ]; then \
 	eval $$ENV_PREFIX poetry run python -c "import pathlib, shutil, sysconfig; src=pathlib.Path('$(shell pwd)/sitecustomize.py'); target=pathlib.Path(sysconfig.get_paths()['purelib'])/'sitecustomize.py'; shutil.copy2(src, target); print(f'Installed sitecustomize.py to {target}')"; \
+	if [ -n "$$VENV_PATH" ] && [ -f "$(shell pwd)/pip.conf" ]; then \
+	mkdir -p "$$VENV_PATH"; \
+	cp "$(shell pwd)/pip.conf" "$$VENV_PATH/pip.conf"; \
+	echo "Copied pip.conf to $$VENV_PATH/pip.conf for insecure installs."; \
+	fi; \
 	fi; \
 	if [ "$(shell uname)" = "Darwin" ]; then \
 	echo "$(BLUE)Installing chroma-hnswlib...$(RESET)"; \
