@@ -80,6 +80,21 @@ def is_custom_agent_server_image() -> bool:
 # These are typically configuration variables that affect the agent's behavior
 AUTO_FORWARD_PREFIXES = ('LLM_', 'LMNR_')
 
+# Explicit (non-prefix-shaped) environment variables forwarded to agent-server.
+# These let the sandbox trust a custom CA / disable TLS verification when running
+# behind an SSL-inspection proxy in an isolated environment. Note that a CA *file
+# path* is only meaningful inside the sandbox if the CA file exists there (bake it
+# into the agent-server image, e.g. at /etc/ssl/certs/ca-certificates.crt). Admins
+# can override the in-container path via OH_AGENT_SERVER_ENV.
+AUTO_FORWARD_VARS = (
+    'REQUESTS_CA_BUNDLE',
+    'SSL_CERT_FILE',
+    'OPENHANDS_CA_BUNDLE',
+    'OPENHANDS_DISABLE_SSL_VERIFY',
+    'SSL_VERIFY',
+    'SSL_CERTIFICATE',
+)
+
 
 def get_agent_server_env() -> dict[str, str]:
     """Get environment variables to be injected into agent server sandbox environments.
@@ -99,6 +114,11 @@ def get_agent_server_env() -> dict[str, str]:
     Auto-forwarded prefixes:
         - LLM_* : LLM configuration (timeout, retries, model settings, etc.)
         - LMNR_* : Laminar monitoring/analytics configuration
+
+    Auto-forwarded explicit variables (see AUTO_FORWARD_VARS):
+        - SSL/CA configuration (REQUESTS_CA_BUNDLE, SSL_CERT_FILE,
+          OPENHANDS_CA_BUNDLE, OPENHANDS_DISABLE_SSL_VERIFY, SSL_VERIFY,
+          SSL_CERTIFICATE) so the sandbox can run behind an SSL-inspection proxy.
 
     Usage:
         # Auto-forwarding (no action needed):
@@ -130,6 +150,12 @@ def get_agent_server_env() -> dict[str, str]:
     # Step 1: Auto-forward environment variables with recognized prefixes
     for key, value in os.environ.items():
         if any(key.startswith(prefix) for prefix in AUTO_FORWARD_PREFIXES):
+            result[key] = value
+
+    # Step 1b: Auto-forward explicit (non-prefix) variables, e.g. SSL config
+    for key in AUTO_FORWARD_VARS:
+        value = os.getenv(key)
+        if value is not None:
             result[key] = value
 
     # Step 2: Apply explicit overrides from OH_AGENT_SERVER_ENV

@@ -16,6 +16,13 @@ services:
       - AGENT_SERVER_IMAGE_TAG=${AGENT_SERVER_IMAGE_TAG:-1.29.0-python}
       - SANDBOX_USER_ID=${SANDBOX_USER_ID:-1234}
       - WORKSPACE_MOUNT_PATH=${WORKSPACE_BASE:-$PWD/workspace}
+      # Offline / SSL-inspection support (pass-through: only forwarded when set on
+      # the host). Also forwarded into the agent-server sandbox.
+      - OPENHANDS_CA_BUNDLE
+      - OPENHANDS_DISABLE_SSL_VERIFY
+      - REQUESTS_CA_BUNDLE
+      - SSL_CERT_FILE
+      - LITE_LLM_API_URL
     ports:
       - "3000:3000"
     extra_hosts:

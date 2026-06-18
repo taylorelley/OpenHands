@@ -27,6 +27,7 @@ from openhands.app_server.sandbox.remote_sandbox_spec_service import (
 )
 from openhands.app_server.sandbox.sandbox_spec_service import (
     AUTO_FORWARD_PREFIXES,
+    AUTO_FORWARD_VARS,
     get_agent_server_env,
 )
 
@@ -293,6 +294,52 @@ class TestLLMAutoForwarding:
             # Lowercase variants should not be included
             assert 'llm_timeout' not in result
             assert 'Llm_Timeout' not in result
+
+
+class TestSSLAutoForwarding:
+    """Test forwarding of SSL / CA configuration variables to the sandbox."""
+
+    def test_ssl_vars_listed(self):
+        """The expected SSL/CA variables are in the explicit forward list."""
+        for var in (
+            'REQUESTS_CA_BUNDLE',
+            'SSL_CERT_FILE',
+            'OPENHANDS_CA_BUNDLE',
+            'OPENHANDS_DISABLE_SSL_VERIFY',
+        ):
+            assert var in AUTO_FORWARD_VARS
+
+    def test_ssl_vars_forwarded(self):
+        """SSL/CA variables set on the host are forwarded to the sandbox."""
+        env_vars = {
+            'REQUESTS_CA_BUNDLE': '/etc/ssl/certs/ca-certificates.crt',
+            'OPENHANDS_DISABLE_SSL_VERIFY': 'true',
+            'OPENHANDS_CA_BUNDLE': '/etc/ssl/corp.pem',
+            'UNRELATED_VAR': 'nope',
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert result['REQUESTS_CA_BUNDLE'] == '/etc/ssl/certs/ca-certificates.crt'
+            assert result['OPENHANDS_DISABLE_SSL_VERIFY'] == 'true'
+            assert result['OPENHANDS_CA_BUNDLE'] == '/etc/ssl/corp.pem'
+            assert 'UNRELATED_VAR' not in result
+
+    def test_unset_ssl_vars_not_forwarded(self):
+        """SSL/CA variables that are not set are not added to the result."""
+        with patch.dict(os.environ, {}, clear=True):
+            result = get_agent_server_env()
+            for var in AUTO_FORWARD_VARS:
+                assert var not in result
+
+    def test_explicit_override_wins_over_ssl_forward(self):
+        """OH_AGENT_SERVER_ENV overrides an auto-forwarded SSL variable."""
+        env_vars = {
+            'OPENHANDS_CA_BUNDLE': '/etc/ssl/corp.pem',
+            'OH_AGENT_SERVER_ENV': '{"OPENHANDS_CA_BUNDLE": "/custom/ca.pem"}',
+        }
+        with patch.dict(os.environ, env_vars, clear=True):
+            result = get_agent_server_env()
+            assert result['OPENHANDS_CA_BUNDLE'] == '/custom/ca.pem'
 
 
 class TestLMNRAutoForwarding:

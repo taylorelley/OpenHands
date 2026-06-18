@@ -1,7 +1,24 @@
 ARG OPENHANDS_BUILD_VERSION=dev
-FROM node:25.9-trixie-slim AS frontend-builder
+# Base images are parametrized so offline builds can point them at a private
+# (e.g. GitLab) container registry mirror via --build-arg. Defaults match the
+# public upstream images so standard builds are unaffected.
+ARG NODE_IMAGE=node:25.9-trixie-slim
+ARG PYTHON_IMAGE=python:3.13.7-slim-trixie
+FROM ${NODE_IMAGE} AS frontend-builder
 
 WORKDIR /app
+
+# Offline build support. Drop a corporate root CA (for SSL-inspection proxies)
+# as a *.crt into containers/certs/ and it is added to the system trust store;
+# NODE_EXTRA_CA_CERTS then points npm at that store. NPM_CONFIG_REGISTRY lets the
+# build resolve packages from a private (e.g. GitLab) mirror. Both default to a
+# no-op so public builds are unaffected.
+ARG NPM_CONFIG_REGISTRY=
+COPY containers/certs/ /tmp/ca-certs/
+COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+RUN /tmp/install-ca-cert.sh /tmp/ca-certs
+ENV npm_config_registry=${NPM_CONFIG_REGISTRY} \
+    NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
@@ -9,7 +26,7 @@ RUN npm ci
 COPY frontend ./
 RUN npm run build
 
-FROM python:3.13.7-slim-trixie AS base
+FROM ${PYTHON_IMAGE} AS base
 FROM base AS backend-builder
 
 WORKDIR /app
@@ -19,6 +36,20 @@ ENV POETRY_NO_INTERACTION=1 \
     POETRY_VIRTUALENVS_IN_PROJECT=1 \
     POETRY_VIRTUALENVS_CREATE=1 \
     POETRY_CACHE_DIR=/tmp/poetry_cache
+
+# Offline build support (see frontend stage). A *.crt in containers/certs/ is
+# added to the system trust store and pip/requests are pointed at it. PIP_INDEX_URL
+# (honored by both pip and poetry) selects a private PyPI mirror; PIP_TRUSTED_HOST
+# skips TLS to the mirror when trust can't be established. All default to a no-op.
+ARG PIP_INDEX_URL=
+ARG PIP_TRUSTED_HOST=
+COPY containers/certs/ /tmp/ca-certs/
+COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+RUN /tmp/install-ca-cert.sh /tmp/ca-certs
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 # Pin Poetry version to match the version used to generate poetry.lock
 ARG POETRY_VERSION=2.3.4
