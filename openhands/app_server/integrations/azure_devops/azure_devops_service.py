@@ -30,6 +30,7 @@ from openhands.app_server.integrations.service_types import (
     RequestMethod,
 )
 from openhands.app_server.utils.auth import looks_like_jwt
+from openhands.app_server.utils.http_session import httpx_verify_option
 from openhands.app_server.utils.import_utils import get_impl
 
 
@@ -172,7 +173,7 @@ class AzureDevOpsService(
         method: RequestMethod = RequestMethod.GET,
     ) -> tuple[Any, dict]:
         try:
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(verify=httpx_verify_option()) as client:
                 azure_devops_headers = await self._get_azure_devops_headers()
 
                 # Make initial request

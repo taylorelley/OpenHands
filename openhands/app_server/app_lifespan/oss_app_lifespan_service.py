@@ -7,12 +7,16 @@ from alembic import command
 from alembic.config import Config
 
 from openhands.app_server.app_lifespan.app_lifespan_service import AppLifespanService
+from openhands.app_server.utils.http_session import configure_litellm_ssl
 
 
 class OssAppLifespanService(AppLifespanService):
     run_alembic_on_startup: bool = True
 
     async def __aenter__(self):
+        # Apply any custom CA bundle / SSL-verify settings to litellm before the
+        # app starts serving so outbound LLM calls work behind SSL inspection.
+        configure_litellm_ssl()
         if self.run_alembic_on_startup:
             self.run_alembic()
         return self

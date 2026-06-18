@@ -65,6 +65,13 @@ _BARE_OPENAI_MODELS: set[str] = set(_SDK_OPENAI)
 _BARE_ANTHROPIC_MODELS: set[str] = set(_SDK_ANTHROPIC)
 _BARE_MISTRAL_MODELS: set[str] = set(_SDK_MISTRAL)
 
+# Note for offline / air-gapped deployments: the ``openhands/*`` provider and the
+# managed LiteLLM proxy default (``LITE_LLM_API_URL``) are not reachable without
+# internet access. To use a self-hosted, OpenAI-compatible endpoint instead,
+# configure the LLM with ``model='openai/<served-name>'``, an explicit ``base_url``
+# pointing at the internal endpoint, and an ``api_key``. ``resolve_llm_base_url``
+# passes an explicit ``base_url`` through unchanged, so no code change is needed —
+# see docs/deployment/offline.md.
 DEFAULT_OPENHANDS_MODEL = 'openhands/minimax-m2.7'
 
 

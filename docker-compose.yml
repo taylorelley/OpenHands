@@ -11,6 +11,16 @@ services:
       - AGENT_SERVER_IMAGE_TAG=${AGENT_SERVER_IMAGE_TAG:-1.29.0-python}
       #- SANDBOX_USER_ID=${SANDBOX_USER_ID:-1234} # enable this only if you want a specific non-root sandbox user but you will have to manually adjust permissions of ~/.openhands for this user
       - WORKSPACE_MOUNT_PATH=${WORKSPACE_BASE:-$PWD/workspace}
+      # Offline / SSL-inspection support. The pass-through form (no "=") only
+      # forwards a variable when it is set on the host, so the image's baked CA
+      # defaults (REQUESTS_CA_BUNDLE -> /etc/ssl/certs/ca-certificates.crt) are
+      # preserved otherwise. These are also forwarded into the agent-server
+      # sandbox (see sandbox_spec_service.AUTO_FORWARD_VARS).
+      - OPENHANDS_CA_BUNDLE
+      - OPENHANDS_DISABLE_SSL_VERIFY
+      - REQUESTS_CA_BUNDLE
+      - SSL_CERT_FILE
+      - LITE_LLM_API_URL
     ports:
       - "3000:3000"
     extra_hosts:

@@ -1,7 +1,28 @@
 # syntax=docker/dockerfile:1
 
 ###
-FROM ubuntu:26.04 AS dind
+# Base image is parametrized so offline builds can point it at a private
+# (e.g. GitLab) registry mirror via --build-arg BASE_IMAGE=...; default matches
+# the public upstream image.
+ARG BASE_IMAGE=ubuntu:26.04
+FROM ${BASE_IMAGE} AS dind
+
+# Offline build support: optionally rewrite the Ubuntu apt sources to a private
+# mirror, and bake a corporate root CA (dropped as *.crt into containers/certs/)
+# into the trust store so the subsequent HTTPS apt/curl calls survive an
+# SSL-inspection proxy. Both default to a no-op for public builds.
+ARG APT_MIRROR=
+RUN apt-get update && apt-get install -y ca-certificates curl
+COPY containers/certs/ /tmp/ca-certs/
+COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+RUN /tmp/install-ca-cert.sh /tmp/ca-certs
+RUN if [ -n "${APT_MIRROR}" ]; then \
+		sed -i "s|http://archive.ubuntu.com/ubuntu|${APT_MIRROR}|g; s|http://ports.ubuntu.com/ubuntu-ports|${APT_MIRROR}|g; s|http://security.ubuntu.com/ubuntu|${APT_MIRROR}|g" \
+			/etc/apt/sources.list /etc/apt/sources.list.d/*.sources 2>/dev/null || true; \
+	fi
+ENV NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt
 
 # https://docs.docker.com/engine/install/ubuntu/
 RUN apt-get update && apt-get install -y \

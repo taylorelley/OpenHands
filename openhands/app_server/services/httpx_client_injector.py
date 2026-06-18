@@ -5,6 +5,7 @@ from fastapi import Request
 from pydantic import BaseModel, Field
 
 from openhands.app_server.services.injector import Injector, InjectorState
+from openhands.app_server.utils.http_session import httpx_verify_option
 
 HTTPX_CLIENT_ATTR = 'httpx_client'
 HTTPX_CLIENT_KEEP_OPEN_ATTR = 'httpx_client_keep_open'
@@ -24,7 +25,9 @@ class HttpxClientInjector(BaseModel, Injector[httpx.AsyncClient]):
         if httpx_client:
             yield httpx_client
             return
-        httpx_client = httpx.AsyncClient(timeout=self.timeout)
+        httpx_client = httpx.AsyncClient(
+            timeout=self.timeout, verify=httpx_verify_option()
+        )
         try:
             setattr(state, HTTPX_CLIENT_ATTR, httpx_client)
             yield httpx_client
