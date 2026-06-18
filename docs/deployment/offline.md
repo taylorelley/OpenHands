@@ -67,6 +67,17 @@ docker build -f containers/app/Dockerfile \
   -t openhands:offline .
 ```
 
+### Building through `docker compose`
+
+`docker-compose.yml` forwards `NODE_IMAGE`, `PYTHON_IMAGE`, `PIP_INDEX_URL`,
+`PIP_TRUSTED_HOST`, `NPM_CONFIG_REGISTRY`, and `INSECURE_SKIP_TLS_VERIFY` from the
+environment into the image build, so you can drive the whole offline build with
+env vars (e.g. from `.env.offline.example`) and run:
+
+```bash
+docker compose up -d --build
+```
+
 > The dev image (`containers/dev/Dockerfile`) additionally pulls third-party apt
 > repos (Docker, GitHub CLI, deadsnakes, NodeSource, Poetry). For a fully
 > air-gapped dev build, serve those components from your GitLab apt mirror and
@@ -114,15 +125,35 @@ the app server. The SSL vars are auto-forwarded there via
 
 ### Escape hatch: disable verification entirely
 
-If you cannot install the CA, set:
+There are **two separate** verification phases — runtime and build — with
+**different** flags. They do not substitute for each other.
+
+**Runtime** (the app process) — set:
 
 ```bash
 export OPENHANDS_DISABLE_SSL_VERIFY=true
 ```
 
 This makes `httpx_verify_option()` return `False` and sets `litellm.ssl_verify =
-False`. It is **insecure** (no certificate validation) and should be a last
-resort. The flag is auto-forwarded into the sandbox too.
+False`. The flag is auto-forwarded into the sandbox too.
+
+**Build** (`docker build` / `docker compose build`) — `OPENHANDS_DISABLE_SSL_VERIFY`
+has **no effect here**; the image build runs `pip`, `poetry`, and `npm`, which
+verify TLS independently. If you cannot drop the CA into `containers/certs/`,
+build with:
+
+```bash
+export INSECURE_SKIP_TLS_VERIFY=1
+docker compose up -d --build
+```
+
+`containers/app/insecure-tls.sh` then disables TLS verification for each build
+package manager (pip via `/etc/pip.conf` trusted-host, poetry via
+`poetry config certificates.pypi.cert false`, npm via `strict-ssl false`). If you
+also set `PIP_INDEX_URL`, its host is added to pip's trusted-host list.
+
+Both flags are **insecure** (no certificate validation) and are a last resort —
+prefer installing the CA.
 
 ---
 

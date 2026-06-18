@@ -12,16 +12,19 @@ WORKDIR /app
 # as a *.crt into containers/certs/ and it is added to the system trust store;
 # NODE_EXTRA_CA_CERTS then points npm at that store. NPM_CONFIG_REGISTRY lets the
 # build resolve packages from a private (e.g. GitLab) mirror. Both default to a
-# no-op so public builds are unaffected.
+# no-op so public builds are unaffected. INSECURE_SKIP_TLS_VERIFY=1 is an insecure
+# escape hatch that disables TLS verification when no CA is available.
 ARG NPM_CONFIG_REGISTRY=
+ARG INSECURE_SKIP_TLS_VERIFY=
 COPY containers/certs/ /tmp/ca-certs/
 COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+COPY containers/app/insecure-tls.sh /tmp/insecure-tls.sh
 RUN /tmp/install-ca-cert.sh /tmp/ca-certs
 ENV npm_config_registry=${NPM_CONFIG_REGISTRY} \
     NODE_EXTRA_CA_CERTS=/etc/ssl/certs/ca-certificates.crt
 
 COPY frontend/package.json frontend/package-lock.json ./
-RUN npm ci
+RUN /tmp/insecure-tls.sh && npm ci
 
 COPY frontend ./
 RUN npm run build
@@ -43,8 +46,10 @@ ENV POETRY_NO_INTERACTION=1 \
 # skips TLS to the mirror when trust can't be established. All default to a no-op.
 ARG PIP_INDEX_URL=
 ARG PIP_TRUSTED_HOST=
+ARG INSECURE_SKIP_TLS_VERIFY=
 COPY containers/certs/ /tmp/ca-certs/
 COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+COPY containers/app/insecure-tls.sh /tmp/insecure-tls.sh
 RUN /tmp/install-ca-cert.sh /tmp/ca-certs
 ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
     PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
@@ -53,13 +58,18 @@ ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
 
 # Pin Poetry version to match the version used to generate poetry.lock
 ARG POETRY_VERSION=2.3.4
-RUN apt-get update -y \
+# insecure-tls.sh (no-op unless INSECURE_SKIP_TLS_VERIFY) writes /etc/pip.conf so
+# the poetry pip install can skip TLS verification when no CA is available.
+RUN /tmp/insecure-tls.sh \
+    && apt-get update -y \
     && apt-get install -y curl make git build-essential jq gettext \
     && python3 -m pip install "poetry==${POETRY_VERSION}" --break-system-packages
 
 COPY pyproject.toml poetry.lock ./
 RUN touch README.md
-RUN export POETRY_CACHE_DIR && poetry install --no-root && rm -rf $POETRY_CACHE_DIR
+# Re-run after poetry is installed so its own cert verification can be disabled.
+RUN /tmp/insecure-tls.sh \
+    && export POETRY_CACHE_DIR && poetry install --no-root && rm -rf $POETRY_CACHE_DIR
 
 FROM base AS openhands-app
 
@@ -81,6 +91,22 @@ ENV FILE_STORE_PATH=/.openhands
 ENV INIT_GIT_IN_EMPTY_WORKSPACE=1
 RUN mkdir -p $FILE_STORE_PATH
 RUN mkdir -p $WORKSPACE_BASE
+
+# Offline build support for this stage: bake the CA into the trust store, point
+# pip at it (pip uses certifi, not the system store, by default), allow a private
+# mirror, and - when INSECURE_SKIP_TLS_VERIFY is set - write /etc/pip.conf so the
+# pip pins below can reach PyPI without TLS verification.
+ARG INSECURE_SKIP_TLS_VERIFY=
+ARG PIP_INDEX_URL=
+ARG PIP_TRUSTED_HOST=
+COPY containers/certs/ /tmp/ca-certs/
+COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
+COPY containers/app/insecure-tls.sh /tmp/insecure-tls.sh
+RUN /tmp/install-ca-cert.sh /tmp/ca-certs && /tmp/insecure-tls.sh
+ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
+    PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
+    PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
 
 RUN apt-get update -y \
     && apt-get install -y curl git ssh sudo \
