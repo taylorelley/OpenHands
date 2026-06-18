@@ -4,6 +4,20 @@ services:
     build:
       context: ./
       dockerfile: ./containers/app/Dockerfile
+      # Offline build support: these forward to the Dockerfile ARGs so the whole
+      # offline flow works through `docker compose build`. All default to a no-op,
+      # so a normal build is unaffected. See docs/deployment/offline.md.
+      #   - base image mirrors: NODE_IMAGE / PYTHON_IMAGE
+      #   - package mirrors:    PIP_INDEX_URL / PIP_TRUSTED_HOST / NPM_CONFIG_REGISTRY
+      #   - insecure bypass:    INSECURE_SKIP_TLS_VERIFY=1 (disables TLS verify when
+      #                         no corporate CA is dropped into containers/certs/)
+      args:
+        NODE_IMAGE: ${NODE_IMAGE:-node:25.9-trixie-slim}
+        PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13.7-slim-trixie}
+        PIP_INDEX_URL: ${PIP_INDEX_URL:-}
+        PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
+        NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-}
+        INSECURE_SKIP_TLS_VERIFY: ${INSECURE_SKIP_TLS_VERIFY:-}
     image: openhands:latest
     container_name: openhands-app-${DATE:-}
     environment:
