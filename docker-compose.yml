@@ -11,6 +11,9 @@ services:
       #   - package mirrors:    PIP_INDEX_URL / PIP_TRUSTED_HOST / NPM_CONFIG_REGISTRY
       #   - insecure bypass:    INSECURE_SKIP_TLS_VERIFY=1 (disables TLS verify when
       #                         no corporate CA is dropped into containers/certs/)
+      #   - proxy resilience:   POETRY_INSTALLER_MAX_WORKERS (lower = fewer parallel
+      #                         downloads, e.g. 2) and POETRY_REQUESTS_TIMEOUT (e.g. 60)
+      #                         help when a slow/flaky proxy drops poetry downloads
       args:
         NODE_IMAGE: ${NODE_IMAGE:-node:25.9-trixie-slim}
         PYTHON_IMAGE: ${PYTHON_IMAGE:-python:3.13.7-slim-trixie}
@@ -18,6 +21,8 @@ services:
         PIP_TRUSTED_HOST: ${PIP_TRUSTED_HOST:-}
         NPM_CONFIG_REGISTRY: ${NPM_CONFIG_REGISTRY:-}
         INSECURE_SKIP_TLS_VERIFY: ${INSECURE_SKIP_TLS_VERIFY:-}
+        POETRY_INSTALLER_MAX_WORKERS: ${POETRY_INSTALLER_MAX_WORKERS:-}
+        POETRY_REQUESTS_TIMEOUT: ${POETRY_REQUESTS_TIMEOUT:-}
     image: openhands:latest
     container_name: openhands-app-${DATE:-}
     environment:

@@ -42,8 +42,9 @@ ENV POETRY_NO_INTERACTION=1 \
 
 # Offline build support (see frontend stage). A *.crt in containers/certs/ is
 # added to the system trust store and pip/requests are pointed at it. PIP_INDEX_URL
-# (honored by both pip and poetry) selects a private PyPI mirror; PIP_TRUSTED_HOST
-# skips TLS to the mirror when trust can't be established. All default to a no-op.
+# selects a private PyPI mirror for pip (note: poetry does NOT read PIP_INDEX_URL -
+# it always resolves from pypi.org unless a source is declared in pyproject.toml);
+# PIP_TRUSTED_HOST skips TLS to the mirror. All default to a no-op.
 ARG PIP_INDEX_URL=
 ARG PIP_TRUSTED_HOST=
 ARG INSECURE_SKIP_TLS_VERIFY=
@@ -51,10 +52,14 @@ COPY containers/certs/ /tmp/ca-certs/
 COPY containers/app/install-ca-cert.sh /tmp/install-ca-cert.sh
 COPY containers/app/insecure-tls.sh /tmp/insecure-tls.sh
 RUN /tmp/install-ca-cert.sh /tmp/ca-certs
+# PIP_DEFAULT_TIMEOUT / PIP_RETRIES add resilience when reaching PyPI through a
+# slow or flaky SSL-inspection proxy (pip's defaults are 15s / 5 retries).
 ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
     PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
     PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
-    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_DEFAULT_TIMEOUT=60 \
+    PIP_RETRIES=5
 
 # Pin Poetry version to match the version used to generate poetry.lock
 ARG POETRY_VERSION=2.3.4
@@ -67,8 +72,19 @@ RUN /tmp/insecure-tls.sh \
 
 COPY pyproject.toml poetry.lock ./
 RUN touch README.md
-# Re-run after poetry is installed so its own cert verification can be disabled.
+# Poetry download resilience for flaky/slow proxies: lower the parallelism
+# (POETRY_INSTALLER_MAX_WORKERS) and raise the per-request timeout
+# (POETRY_REQUESTS_TIMEOUT). Both are only applied when set (empty crashes
+# poetry's int parsing), so public builds keep poetry's defaults.
+ARG POETRY_INSTALLER_MAX_WORKERS=
+ARG POETRY_REQUESTS_TIMEOUT=
+# Re-run insecure-tls.sh after poetry is installed so its own cert verification
+# can be disabled.
 RUN /tmp/insecure-tls.sh \
+    && if [ -n "${POETRY_INSTALLER_MAX_WORKERS}" ]; then \
+         export POETRY_INSTALLER_MAX_WORKERS="${POETRY_INSTALLER_MAX_WORKERS}"; fi \
+    && if [ -n "${POETRY_REQUESTS_TIMEOUT}" ]; then \
+         export POETRY_REQUESTS_TIMEOUT="${POETRY_REQUESTS_TIMEOUT}"; fi \
     && export POETRY_CACHE_DIR && poetry install --no-root && rm -rf $POETRY_CACHE_DIR
 
 FROM base AS openhands-app
@@ -106,7 +122,9 @@ RUN /tmp/install-ca-cert.sh /tmp/ca-certs && /tmp/insecure-tls.sh
 ENV PIP_INDEX_URL=${PIP_INDEX_URL} \
     PIP_TRUSTED_HOST=${PIP_TRUSTED_HOST} \
     PIP_CERT=/etc/ssl/certs/ca-certificates.crt \
-    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt
+    REQUESTS_CA_BUNDLE=/etc/ssl/certs/ca-certificates.crt \
+    PIP_DEFAULT_TIMEOUT=60 \
+    PIP_RETRIES=5
 
 RUN apt-get update -y \
     && apt-get install -y curl git ssh sudo \
