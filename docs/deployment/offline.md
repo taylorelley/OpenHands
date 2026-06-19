@@ -50,10 +50,21 @@ These are read by `get_agent_server_image()` in
 | `NODE_IMAGE` | app | Node base image (default `node:25.9-trixie-slim`) |
 | `PYTHON_IMAGE` | app | Python base image (default `python:3.13.7-slim-trixie`) |
 | `BASE_IMAGE` | dev | Ubuntu base image (default `ubuntu:26.04`) |
-| `PIP_INDEX_URL` | app | Private PyPI mirror (honored by pip **and** poetry) |
+| `PIP_INDEX_URL` | app | Private PyPI mirror for **pip** (see poetry note below) |
 | `PIP_TRUSTED_HOST` | app | Skip TLS to the pip mirror if needed |
 | `NPM_CONFIG_REGISTRY` | app | Private npm registry |
+| `INSECURE_SKIP_TLS_VERIFY` | app | Disable build-time TLS verification (insecure) |
+| `POETRY_INSTALLER_MAX_WORKERS` | app | Lower poetry download parallelism (e.g. `2`) |
+| `POETRY_REQUESTS_TIMEOUT` | app | Raise poetry per-request timeout (e.g. `60`) |
 | `APT_MIRROR` | dev | Private Ubuntu apt mirror |
+
+> **poetry does not read `PIP_INDEX_URL`.** `poetry install` always resolves from
+> `pypi.org` unless a source is declared in `pyproject.toml`. A GitLab PyPI
+> *registry* that only hosts your **published** packages is **not** a pull-through
+> proxy and cannot serve the full dependency tree, so it can't be used as the
+> poetry index. To pull everything from a private index you need a real PyPI
+> pull-through proxy (Nexus/Artifactory/devpi/GitLab dependency proxy) declared as
+> a primary `[[tool.poetry.source]]`, with `poetry.lock` regenerated against it.
 
 Example offline build:
 
@@ -70,13 +81,35 @@ docker build -f containers/app/Dockerfile \
 ### Building through `docker compose`
 
 `docker-compose.yml` forwards `NODE_IMAGE`, `PYTHON_IMAGE`, `PIP_INDEX_URL`,
-`PIP_TRUSTED_HOST`, `NPM_CONFIG_REGISTRY`, and `INSECURE_SKIP_TLS_VERIFY` from the
-environment into the image build, so you can drive the whole offline build with
-env vars (e.g. from `.env.offline.example`) and run:
+`PIP_TRUSTED_HOST`, `NPM_CONFIG_REGISTRY`, `INSECURE_SKIP_TLS_VERIFY`,
+`POETRY_INSTALLER_MAX_WORKERS`, and `POETRY_REQUESTS_TIMEOUT` from the environment
+into the image build, so you can drive the whole offline build with env vars
+(e.g. from `.env.offline.example`) and run:
 
 ```bash
 docker compose up -d --build
 ```
+
+### `poetry install` fails partway through a flaky proxy
+
+Symptom: the build gets past the TLS/cert stage, `poetry install` starts
+downloading, then fails with `connection error ... the server is not responding`
+or `the hostname cannot be resolved`. This is a throughput/stability problem, not
+a certificate problem — many parallel TLS connections to `files.pythonhosted.org`
+through an SSL-inspection proxy can overwhelm or get throttled by the proxy.
+
+Fix: reduce poetry's parallelism and raise its timeout, then rebuild:
+
+```bash
+export POETRY_INSTALLER_MAX_WORKERS=2   # fewer concurrent downloads
+export POETRY_REQUESTS_TIMEOUT=60       # seconds
+docker compose up -d --build
+```
+
+(The build already sets `PIP_DEFAULT_TIMEOUT=60` / `PIP_RETRIES=5` for pip.) If it
+still fails intermittently, lower `POETRY_INSTALLER_MAX_WORKERS` to `1` and
+re-run — the build resumes from cached layers, so only the `poetry install` step
+repeats.
 
 > The dev image (`containers/dev/Dockerfile`) additionally pulls third-party apt
 > repos (Docker, GitHub CLI, deadsnakes, NodeSource, Poetry). For a fully
