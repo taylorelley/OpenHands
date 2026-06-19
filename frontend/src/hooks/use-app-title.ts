@@ -1,6 +1,7 @@
 import { useParams } from "react-router";
 import { useConfig } from "#/hooks/query/use-config";
 import { useUserConversation } from "#/hooks/query/use-user-conversation";
+import { useSettings } from "#/hooks/query/use-settings";
 
 const APP_TITLE_OSS = "OpenHands";
 const APP_TITLE_SAAS = "OpenHands Cloud";
@@ -9,13 +10,21 @@ const APP_TITLE_SAAS = "OpenHands Cloud";
  * Hook that returns the appropriate document title based on app_mode and current route.
  * - For conversation pages: "Conversation Title | OpenHands" or "Conversation Title | OpenHands Cloud"
  * - For other pages: "OpenHands" or "OpenHands Cloud"
+ * A custom theme's `app_name` overrides the default brand name when active.
  */
 export const useAppTitle = () => {
   const { data: config } = useConfig();
+  const { data: settings } = useSettings();
   const { conversationId } = useParams<{ conversationId: string }>();
   const { data: conversation } = useUserConversation(conversationId ?? null);
 
-  const appTitle = config?.app_mode === "oss" ? APP_TITLE_OSS : APP_TITLE_SAAS;
+  const defaultTitle =
+    config?.app_mode === "oss" ? APP_TITLE_OSS : APP_TITLE_SAAS;
+  const themeProfiles = settings?.theme_profiles;
+  const activeTheme = themeProfiles?.active
+    ? themeProfiles.profiles[themeProfiles.active]
+    : undefined;
+  const appTitle = activeTheme?.app_name || defaultTitle;
   const conversationTitle = conversation?.title;
 
   if (conversationId && conversationTitle) {

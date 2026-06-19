@@ -1,4 +1,4 @@
-import { FiUsers, FiBriefcase } from "react-icons/fi";
+import { FiUsers, FiBriefcase, FiDroplet } from "react-icons/fi";
 import CreditCardIcon from "#/icons/credit-card.svg?react";
 import KeyIcon from "#/icons/key.svg?react";
 import LightbulbIcon from "#/icons/lightbulb.svg?react";
@@ -139,6 +139,12 @@ export const SAAS_NAV_ITEMS: SettingsNavItem[] = [
     text: "SETTINGS$NAV_SKILLS",
     section: "other",
   },
+  {
+    icon: <FiDroplet size={22} />,
+    to: "/settings/appearance",
+    text: "SETTINGS$NAV_APPEARANCE",
+    section: "other",
+  },
 ];
 
 export const OSS_NAV_ITEMS: SettingsNavItem[] = [
@@ -188,5 +194,10 @@ export const OSS_NAV_ITEMS: SettingsNavItem[] = [
     icon: <KeyIcon width={22} height={22} />,
     to: "/settings/secrets",
     text: "SETTINGS$NAV_SECRETS",
+  },
+  {
+    icon: <FiDroplet size={22} />,
+    to: "/settings/appearance",
+    text: "SETTINGS$NAV_APPEARANCE",
   },
 ];

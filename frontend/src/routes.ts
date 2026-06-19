@@ -29,6 +29,7 @@ export default [
       ),
       route("mcp", "routes/mcp-settings.tsx"),
       route("skills", "routes/skills-settings.tsx"),
+      route("appearance", "routes/appearance-settings.tsx"),
       route("user", "routes/user-settings.tsx"),
       route("integrations", "routes/git-settings.tsx"),
       route("app", "routes/app-settings.tsx"),

@@ -28,6 +28,7 @@ from pydantic import (
 from openhands.app_server.integrations.provider import ProviderToken
 from openhands.app_server.integrations.service_types import ProviderType
 from openhands.app_server.settings.llm_profiles import LLMProfiles
+from openhands.app_server.settings.theme_profiles import ThemeProfiles
 from openhands.app_server.utils.jsonpatch_compat import deep_merge
 from openhands.sdk.settings import (
     ACPAgentSettings,
@@ -94,12 +95,15 @@ class SandboxGroupingStrategy(str, Enum):
 
 # Fields the batch ``update()`` method refuses to touch:
 # - ``secrets_store`` is frozen (Pydantic would raise).
-# - ``llm_profiles`` is off-limits for the generic settings POST; profile
-#   mutations go through ``/api/v1/settings/profiles/...`` which validate
-#   inputs, enforce the count cap, and take the per-user lock. Accepting a
-#   raw dict here both bypassed those guards and crashed downstream
-#   serialisation.
-_SETTINGS_UPDATE_IGNORED_FIELDS = frozenset(['secrets_store', 'llm_profiles'])
+# - ``llm_profiles`` / ``theme_profiles`` are off-limits for the generic
+#   settings POST; their mutations go through
+#   ``/api/v1/settings/profiles/...`` / ``/api/v1/settings/themes/...``
+#   which validate inputs, enforce the count cap, and take the per-user
+#   lock. Accepting a raw dict here both bypassed those guards and crashed
+#   downstream serialisation.
+_SETTINGS_UPDATE_IGNORED_FIELDS = frozenset(
+    ['secrets_store', 'llm_profiles', 'theme_profiles']
+)
 
 
 class Settings(BaseModel):
@@ -142,6 +146,14 @@ class Settings(BaseModel):
         description=(
             'Saved LLM profiles and the currently active profile name. '
             'See ``LLMProfiles`` for the profile-management API.'
+        ),
+    )
+    theme_profiles: ThemeProfiles = Field(
+        default_factory=ThemeProfiles,
+        description=(
+            'Saved custom UI themes (core colors + branding) and the '
+            'currently active theme name. See ``ThemeProfiles`` for the '
+            'theme-management API.'
         ),
     )
 

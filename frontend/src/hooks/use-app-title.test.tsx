@@ -23,6 +23,9 @@ vi.mock("react-router", async () => {
     useParams: vi.fn(),
   };
 });
+vi.mock("#/context/use-selected-organization", () => ({
+  useSelectedOrganizationId: () => ({ organizationId: null }),
+}));
 
 describe("useAppTitle", () => {
   const getConfigSpy = vi.spyOn(OptionService, "getConfig");

@@ -32,6 +32,7 @@ import { cn } from "#/utils/utils";
 import { LoadingSpinner } from "#/components/shared/loading-spinner";
 import { useAppTitle } from "#/hooks/use-app-title";
 import { useAutoAcceptInvitation } from "#/hooks/use-auto-accept-invitation";
+import { useApplyTheme } from "#/hooks/use-apply-theme";
 
 export function ErrorBoundary() {
   const error = useRouteError();
@@ -103,6 +104,9 @@ export default function MainApp() {
 
   // Auto-select the first organization when none is selected
   useAutoSelectOrganization();
+
+  // Apply the active custom theme's core colors as CSS variable overrides
+  useApplyTheme();
 
   React.useEffect(() => {
     // Don't change language when on intermediate pages (TOS, profile questions)

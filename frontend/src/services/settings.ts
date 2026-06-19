@@ -64,6 +64,10 @@ export const DEFAULT_SETTINGS: Settings = {
     confirmation_mode: false,
     security_analyzer: "llm",
   },
+  theme_profiles: {
+    profiles: {},
+    active: null,
+  },
 };
 
 /**
