@@ -210,9 +210,53 @@ unchanged (`openhands/app_server/utils/llm.py`). `LLM_*` environment variables
 are auto-forwarded into the sandbox. If you front the model with a LiteLLM proxy,
 override the default proxy URL with `LITE_LLM_API_URL`.
 
+> **The `openai/` prefix is required.** A bare model name (e.g. `nessie-coder`)
+> makes the agent-server fail every turn with
+> `litellm.BadRequestError: LLM Provider NOT provided ... You passed model=<name>`.
+> litellm cannot infer the provider from the name alone — use
+> `openai/<served-model-name>` for any self-hosted OpenAI-compatible endpoint.
+
 ---
 
-## 4. Verification checklist
+## 4. Remote browser access (CORS)
+
+If you open the UI from a **different machine** than the Docker host, the browser
+makes `fetch` calls **directly to the agent-server container** (not only to the
+app server). The agent-server only accepts cross-origin requests from origins in
+its allow-list, which OpenHands builds from the app server's `web_url` +
+`permitted_cors_origins` and injects into the sandbox as `OH_ALLOW_CORS_ORIGINS_*`
+(`openhands/app_server/sandbox/docker_sandbox_service.py`).
+
+If neither is set, the allow-list is empty and every preflight `OPTIONS` to the
+agent-server returns **400**, which the UI surfaces as generic **"network errors"**
+even though all containers are healthy. The WebSocket still connects (it isn't
+subject to CORS preflight), so skills/events partly load — a tell-tale sign.
+
+Symptom in the agent-server logs:
+
+```
+192.168.x.x - "OPTIONS /api/conversations/.../events/count HTTP/1.1" 400
+192.168.x.x - "OPTIONS /api/git/changes?path=/workspace/project HTTP/1.1" 400
+```
+
+Fix: set the origin to the **exact** value shown in the browser address bar —
+scheme **and** host **and** port must all match:
+
+```bash
+export OH_WEB_URL=http://192.168.1.50:3000
+# optionally add more origins:
+# export OH_PERMITTED_CORS_ORIGINS_0=http://192.168.1.50:3000
+docker compose up -d        # recreate; no rebuild needed
+```
+
+`docker-compose.yml` forwards `OH_WEB_URL`, `OH_PERMITTED_CORS_ORIGINS_0`, and the
+legacy `PERMITTED_CORS_ORIGINS` from the host into the app container. A common
+mistake is omitting the port (`http://host` vs `http://host:3000`) or using
+`https` when the UI is served over `http` — the origin must match byte-for-byte.
+
+---
+
+## 5. Verification checklist
 
 1. **Offline build** with egress blocked succeeds, pulling only from GitLab.
 2. **SSL helper:** `httpx_verify_option()` returns `False` when
@@ -227,3 +271,6 @@ override the default proxy URL with `LITE_LLM_API_URL`.
    path.
 6. **Registry pull:** with `AGENT_SERVER_IMAGE_REPOSITORY`/`_TAG` set, the
    sandbox image is pulled from GitLab.
+7. **Remote browser:** opening the UI from another machine, starting a
+   conversation produces no "network error"; the agent-server log shows preflight
+   `OPTIONS` requests returning `200` (not `400`) with `OH_WEB_URL` set.
