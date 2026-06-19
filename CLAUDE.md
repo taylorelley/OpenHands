@@ -108,9 +108,9 @@ Build-time (`--build-arg` or compose `build.args`):
 
 ## Merging updates from upstream without undoing our changes
 
-Upstream is the canonical OpenHands repo (org `OpenHands`; confirm the exact
-repo, e.g. `OpenHands/OpenHands`). Our work lives on branch
-`claude/gifted-wozniak-rs4ba2`, forked from upstream `main`.
+Upstream is the canonical OpenHands repo: `https://github.com/OpenHands/OpenHands.git`
+(`https://github.com/All-Hands-AI/OpenHands.git` redirects to the same repo). Our
+work lives on branch `claude/gifted-wozniak-rs4ba2`, forked from upstream `main`.
 
 ### One-time setup
 
