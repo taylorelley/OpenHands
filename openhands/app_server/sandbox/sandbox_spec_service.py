@@ -154,9 +154,9 @@ def get_agent_server_env() -> dict[str, str]:
 
     # Step 1b: Auto-forward explicit (non-prefix) variables, e.g. SSL config
     for key in AUTO_FORWARD_VARS:
-        value = os.getenv(key)
-        if value is not None:
-            result[key] = value
+        forwarded_value = os.getenv(key)
+        if forwarded_value is not None:
+            result[key] = forwarded_value
 
     # Step 2: Apply explicit overrides from OH_AGENT_SERVER_ENV
     # These take precedence over auto-forwarded variables

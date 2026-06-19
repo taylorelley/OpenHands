@@ -31,6 +31,12 @@ from openhands.app_server.settings.settings_models import (
     Settings,
 )
 from openhands.app_server.settings.settings_store import SettingsStore
+from openhands.app_server.settings.theme_profiles import (
+    Theme,
+    ThemeAlreadyExistsError,
+    ThemeLimitExceededError,
+    ThemeNotFoundError,
+)
 from openhands.app_server.user_auth import (
     get_provider_tokens,
     get_secrets_store,
@@ -613,4 +619,231 @@ async def rename_profile(
     return ProfileMutationResponse(
         name=request.new_name,
         message=f"Profile '{name}' renamed to '{request.new_name}'",
+    )
+
+
+# ── Theme endpoints ────────────────────────────────────────────────
+#
+# Mirrors the LLM Profile endpoints above (same name pattern, same
+# per-user-lock convention) for saved custom UI themes. Themes carry no
+# secrets, so there's no analogue to ``api_key_set`` masking here.
+
+ThemeName = Annotated[
+    str,
+    Path(min_length=1, max_length=64, pattern=_NAME_PATTERN),
+]
+
+_user_theme_locks: defaultdict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+
+
+class ThemeInfo(BaseModel):
+    """Theme summary returned by the list endpoint."""
+
+    name: str
+    primary: str | None = None
+    base: str | None = None
+    base_secondary: str | None = None
+    content: str | None = None
+    app_name: str | None = None
+    logo_url: str | None = None
+
+
+class ThemeListResponse(BaseModel):
+    """Response body for listing themes."""
+
+    themes: list[ThemeInfo]
+    active_theme: str | None = None
+
+
+class ThemeDetailResponse(BaseModel):
+    """Response body for fetching a single theme."""
+
+    name: str
+    config: dict[str, Any]
+
+
+class ThemeMutationResponse(BaseModel):
+    """Response body for save/delete operations."""
+
+    name: str
+    message: str
+
+
+class ActivateThemeResponse(BaseModel):
+    """Response body for activating a theme."""
+
+    name: str
+    message: str
+
+
+class RenameThemeRequest(BaseModel):
+    """Request body for renaming a theme."""
+
+    new_name: str = Field(
+        ...,
+        min_length=1,
+        max_length=64,
+        pattern=_NAME_PATTERN,
+    )
+
+
+class SaveThemeRequest(BaseModel):
+    """Request body for saving a theme.
+
+    ``theme`` already forbids unknown keys (see :class:`Theme`), so a typo
+    like ``{"theme": {"colour": "..."}}`` returns 422 instead of being
+    silently dropped.
+    """
+
+    theme: Theme = Field(default_factory=Theme)
+
+
+@router.get('/themes', response_model=ThemeListResponse)
+async def list_themes(
+    settings: Settings | None = Depends(get_user_settings),
+) -> ThemeListResponse:
+    """List all saved custom themes."""
+    if settings is None:
+        return ThemeListResponse(themes=[], active_theme=None)
+
+    return ThemeListResponse(
+        themes=[ThemeInfo(**t) for t in settings.theme_profiles.summaries()],
+        active_theme=settings.theme_profiles.active,
+    )
+
+
+@router.get('/themes/{name}', response_model=ThemeDetailResponse)
+async def get_theme(
+    name: ThemeName,
+    settings: Settings | None = Depends(get_user_settings),
+) -> ThemeDetailResponse:
+    """Get a specific theme's configuration."""
+    theme = settings.theme_profiles.get(name) if settings is not None else None
+    if theme is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Theme '{name}' not found",
+        )
+
+    return ThemeDetailResponse(name=name, config=theme.model_dump(mode='json'))
+
+
+@router.post(
+    '/themes/{name}',
+    response_model=ThemeMutationResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def save_theme(
+    name: ThemeName,
+    request: Annotated[SaveThemeRequest | None, Body()] = None,
+    user_id: str | None = Depends(get_user_id),
+    settings_store: SettingsStore = Depends(get_user_settings_store),
+) -> ThemeMutationResponse:
+    """Save a theme configuration under ``name``.
+
+    Existing themes with the same name are overwritten. Runs inside a
+    per-user lock to prevent lost updates between concurrent theme writes.
+    Returns 409 if the user is already at the theme cap
+    (:data:`MAX_THEMES_PER_USER`).
+    """
+    if request is None:
+        request = SaveThemeRequest()
+
+    async with _user_theme_locks[_profile_lock_key(user_id)]:
+        settings = await settings_store.load()
+        if settings is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Settings not found',
+            )
+
+        try:
+            settings.theme_profiles.save(name, request.theme)
+        except ThemeLimitExceededError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        await settings_store.store(settings)
+
+    return ThemeMutationResponse(name=name, message=f"Theme '{name}' saved")
+
+
+@router.delete('/themes/{name}', response_model=ThemeMutationResponse)
+async def delete_theme(
+    name: ThemeName,
+    user_id: str | None = Depends(get_user_id),
+    settings_store: SettingsStore = Depends(get_user_settings_store),
+) -> ThemeMutationResponse:
+    """Delete a saved theme. Idempotent: returns success even if the theme
+    didn't exist.
+    """
+    async with _user_theme_locks[_profile_lock_key(user_id)]:
+        settings = await settings_store.load()
+        if settings is not None and settings.theme_profiles.delete(name):
+            await settings_store.store(settings)
+
+    return ThemeMutationResponse(name=name, message=f"Theme '{name}' deleted")
+
+
+@router.post('/themes/{name}/activate', response_model=ActivateThemeResponse)
+async def activate_theme(
+    name: ThemeName,
+    user_id: str | None = Depends(get_user_id),
+    settings_store: SettingsStore = Depends(get_user_settings_store),
+) -> ActivateThemeResponse:
+    """Mark a saved theme as the active one."""
+    async with _user_theme_locks[_profile_lock_key(user_id)]:
+        settings = await settings_store.load()
+        if settings is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Theme '{name}' not found",
+            )
+
+        if not settings.theme_profiles.has(name):
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Theme '{name}' not found",
+            )
+        settings.theme_profiles.active = name
+        await settings_store.store(settings)
+
+    return ActivateThemeResponse(name=name, message=f"Switched to theme '{name}'")
+
+
+@router.post('/themes/{name}/rename', response_model=ThemeMutationResponse)
+async def rename_theme(
+    name: ThemeName,
+    request: RenameThemeRequest,
+    user_id: str | None = Depends(get_user_id),
+    settings_store: SettingsStore = Depends(get_user_settings_store),
+) -> ThemeMutationResponse:
+    """Rename a saved theme.
+
+    Preserves the stored config and the active flag if the renamed theme
+    was active. Returns 409 if ``new_name`` is already in use by a
+    different theme.
+    """
+    async with _user_theme_locks[_profile_lock_key(user_id)]:
+        settings = await settings_store.load()
+        if settings is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail='Settings not found',
+            )
+        try:
+            settings.theme_profiles.rename(name, request.new_name)
+        except ThemeNotFoundError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)
+            ) from exc
+        except ThemeAlreadyExistsError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT, detail=str(exc)
+            ) from exc
+        await settings_store.store(settings)
+
+    return ThemeMutationResponse(
+        name=request.new_name,
+        message=f"Theme '{name}' renamed to '{request.new_name}'",
     )

@@ -105,6 +105,7 @@ const normalizeSettingsResponse = (settings: Partial<Settings>): Settings => {
     sandbox_grouping_strategy:
       settings.sandbox_grouping_strategy ??
       DEFAULT_SETTINGS.sandbox_grouping_strategy,
+    theme_profiles: settings.theme_profiles ?? DEFAULT_SETTINGS.theme_profiles,
   };
 };
 

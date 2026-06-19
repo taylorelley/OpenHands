@@ -3,7 +3,7 @@ import ssl
 
 
 def _is_truthy(value: str | None) -> bool:
-    return bool(value) and value.strip().lower() in ('1', 'true', 'yes', 'on')
+    return value is not None and value.strip().lower() in ('1', 'true', 'yes', 'on')
 
 
 # When true, TLS verification is disabled entirely. This is an escape hatch for

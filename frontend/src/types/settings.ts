@@ -115,6 +115,20 @@ export type SkillInfo = {
 
 export type SettingsScope = "personal" | "org";
 
+export type Theme = {
+  primary?: string | null;
+  base?: string | null;
+  base_secondary?: string | null;
+  content?: string | null;
+  app_name?: string | null;
+  logo_url?: string | null;
+};
+
+export type ThemeProfiles = {
+  profiles: Record<string, Theme>;
+  active: string | null;
+};
+
 export type Settings = {
   llm_model: string;
   llm_base_url: string;
@@ -149,4 +163,5 @@ export type Settings = {
   conversation_settings_schema?: SettingsSchema | null;
   conversation_settings?: Record<string, SettingsValue> | null;
   sandbox_grouping_strategy?: SandboxGroupingStrategy;
+  theme_profiles?: ThemeProfiles;
 };
